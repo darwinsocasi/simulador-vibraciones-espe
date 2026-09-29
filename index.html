@@ -1,0 +1,1928 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Simulador 3D de Análisis de Vibraciones | ESPE</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js (3D Graphics) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'panel-bg': '#1e222b',
+                        'panel-border': '#333b4d',
+                        'canvas-bg': '#0f172a',
+                        'accent-purple': '#8b5cf6',
+                        'accent-blue': '#3b82f6',
+                        'accent-green': '#10b981',
+                        'accent-amber': '#f59e0b'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #0f1218;
+            color: #e2e8f0;
+            font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            user-select: none;
+            overflow-x: hidden;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #181c24;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333b4b;
+            border-radius: 3px;
+        }
+
+        .bevel-border {
+            border: 1px solid #333d4f;
+            box-shadow: inset 1px 1px 0px rgba(255,255,255,0.08), 0 4px 12px rgba(0,0,0,0.5);
+        }
+
+        .sensor-btn {
+            transition: all 0.15s ease;
+        }
+        .sensor-btn.active {
+            background-color: #8b5cf6 !important;
+            color: #ffffff !important;
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.6);
+            font-weight: bold;
+        }
+
+        .hud-overlay {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .tab-btn {
+            transition: all 0.2s ease;
+        }
+        .tab-btn.active {
+            border-bottom: 2px solid #8b5cf6;
+            color: #c084fc;
+            background-color: rgba(139, 92, 246, 0.1);
+        }
+    
+        /* OPTIMIZACION RESPONSIVE PARA TABLET Y CELULAR */
+        html { -webkit-text-size-adjust: 100%; }
+        body { min-width: 0; }
+        button, select, input, a { touch-action: manipulation; }
+        #viewport3d canvas { width: 100% !important; height: 100% !important; }
+
+        @media (max-width: 1023px) {
+            body { padding: 8px !important; gap: 8px !important; overflow-x: hidden; }
+            header { align-items: stretch !important; }
+            header > div { max-width: 100%; }
+            #viewport3d { min-height: 420px !important; }
+            main, footer { min-width: 0; }
+        }
+
+        @media (max-width: 640px) {
+            body { padding: 5px !important; font-size: 16px; }
+            header { display: grid !important; grid-template-columns: 1fr !important; gap: 8px !important; padding: 9px !important; }
+            header > div { width: 100%; min-width: 0; }
+            header > div:first-child { align-items: flex-start; }
+            header .text-lg { font-size: .95rem !important; white-space: nowrap; }
+            header .border-l { min-width: 0; }
+            header .border-l span { white-space: normal; line-height: 1.25; }
+            header select { width: 100%; min-height: 44px; font-size: 16px !important; }
+            header a, header button, footer button, .sensor-btn { min-height: 44px; min-width: 44px; font-size: 13px !important; }
+
+            header > div:nth-of-type(3) { display: grid !important; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px !important; }
+            header > div:nth-of-type(3) a { justify-content: center; overflow: hidden; }
+            header > div:last-child { display: grid !important; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px !important; }
+            header > div:last-child button { justify-content: center; padding-left: 6px !important; padding-right: 6px !important; }
+
+            section.lg\:col-span-7 { min-height: 0 !important; }
+            #viewport3d { min-height: 330px !important; height: 330px !important; }
+            #viewport3d .hud-overlay { transform: scale(.88); transform-origin: top right; }
+
+            .tab-btn { min-height: 44px; padding: 7px 8px !important; flex: 1 1 auto; justify-content: center; }
+            #containerTime { height: 220px !important; }
+            #containerSpectrum { height: 245px !important; }
+            #containerDemod { height: auto !important; min-height: 500px; }
+
+            #containerSpectrum > div:first-child,
+            #containerTime > div:first-child,
+            #containerDemod > div:first-child { flex-wrap: wrap; gap: 5px; }
+
+            #spectrumCursorVal { max-width: 100%; overflow-wrap: anywhere; }
+            footer > div { min-width: 0; }
+            footer input[type="number"], footer select { min-height: 42px; font-size: 16px !important; }
+            p, span, div { overflow-wrap: break-word; }
+        }
+
+        @media (max-width: 390px) {
+            #viewport3d { min-height: 290px !important; height: 290px !important; }
+            header > div:nth-of-type(3) { grid-template-columns: 1fr 1fr; }
+            header > div:nth-of-type(3) a:last-child { grid-column: 1 / -1; }
+            header > div:last-child { grid-template-columns: 1fr 1fr; }
+            header > div:last-child button:last-child { grid-column: 1 / -1; }
+            #containerTime { height: 205px !important; }
+            #containerSpectrum { height: 235px !important; }
+        }
+
+        @media (orientation: landscape) and (max-height: 520px) and (max-width: 950px) {
+            #viewport3d { min-height: 300px !important; height: 300px !important; }
+        }
+
+    </style>
+</head>
+<body class="min-h-screen flex flex-col p-2 md:p-3 gap-2 text-slate-200">
+
+    <!-- HEADER BAR -->
+    <header class="bg-panel-bg bevel-border rounded-lg p-2.5 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+            <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 text-white font-black px-3.5 py-1.5 rounded text-lg tracking-wider shadow-md flex items-center gap-2">
+                <i class="fa-solid fa-wave-square text-amber-400 text-base"></i> VIBRA 3D · ESPE
+            </div>
+            <div class="border-l border-slate-700 pl-3 flex flex-col justify-center">
+                <span class="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                    <i class="fa-solid fa-graduation-cap text-amber-400"></i> UNIVERSIDAD DE LAS FUERZAS ARMADAS ESPE
+                </span>
+                <span class="text-xs font-bold text-slate-100">
+                    Docente: Mgtr. D.V.S.
+                </span>
+                <span class="text-[10px] text-slate-400 hidden sm:inline">
+                    IASEMP Ingeniería y Asesoría en Sistemas de Energía, Mantenimiento y Proyectos
+                </span>
+            </div>
+        </div>
+
+        <!-- Assembly Selection Dropdown -->
+        <div class="flex items-center gap-2.5 bg-slate-900/90 px-3 py-1 rounded-md border border-slate-700">
+            <div class="w-8 h-8 rounded bg-blue-600/30 flex items-center justify-center text-blue-400 text-sm">
+                <i class="fa-solid fa-gears"></i>
+            </div>
+            <div>
+                <label for="montajeSelect" class="text-[10px] text-slate-400 block font-semibold uppercase">Seleccionar Montaje:</label>
+                <select id="montajeSelect" class="bg-transparent text-xs font-bold text-slate-100 focus:outline-none cursor-pointer pr-2">
+                    <option value="standard" class="bg-slate-800">Una Base, Standard (Rígida)</option>
+                    <option value="flexible" class="bg-slate-800">Base Flexible / Módulo Educativo</option>
+                    <option value="overhung" class="bg-slate-800">Rotor en Voladizo (Overhung)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- CONTACT & SOCIAL LINKS BAR -->
+        <div class="flex items-center gap-1.5 bg-slate-900/90 px-2.5 py-1 rounded-md border border-slate-700 text-[11px]">
+            <a href="https://chat.whatsapp.com/Kx5UhASQtek1grrAemJLMP?s=sw&p=a&ilr=0" target="_blank" class="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-950/80 px-2 py-1 rounded border border-emerald-800 transition" title="Unirse al Grupo de WhatsApp">
+                <i class="fa-brands fa-whatsapp text-xs"></i> WhatsApp
+            </a>
+            <a href="https://www.linkedin.com/in/darwin-socasi-msc-cmrp-cbm-va-cat-iii-462ab398" target="_blank" class="flex items-center gap-1 text-blue-400 hover:text-blue-300 font-bold bg-blue-950/80 px-2 py-1 rounded border border-blue-800 transition" title="Ver Perfil de LinkedIn">
+                <i class="fa-brands fa-linkedin text-xs"></i> LinkedIn
+            </a>
+            <a href="mailto:socasidarwin19x2@gmail.com" class="flex items-center gap-1 text-amber-300 hover:text-amber-200 font-mono bg-amber-950/60 px-2 py-1 rounded border border-amber-800 transition" title="Enviar correo">
+                <i class="fa-solid fa-envelope"></i> Email
+            </a>
+        </div>
+
+        <!-- Simulation State Controls -->
+        <div class="flex items-center gap-2">
+            <button id="btnAudioToggle" onclick="toggleAudio()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded border border-slate-600 flex items-center gap-1.5 transition" title="Activar/Desactivar Audio Sintetizado de la Máquina">
+                <i class="fa-solid fa-volume-xmark" id="audioIcon"></i> <span id="audioText">Audio OFF</span>
+            </button>
+            <button id="btnPlayPause" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded flex items-center gap-1.5 transition shadow">
+                <i class="fa-solid fa-pause" id="playIcon"></i> <span id="playText">Pausar</span>
+            </button>
+            <button id="btnResetCam" onclick="resetCameraView()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded border border-slate-600 flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-arrows-to-dot"></i> Vista
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT GRID -->
+    <main class="grid grid-cols-1 lg:grid-cols-12 gap-2.5 flex-1">
+        
+        <!-- LEFT COLUMN: 3D VIEWPORT & HUD CONTROLS (7 Cols) -->
+        <section class="lg:col-span-7 bg-panel-bg bevel-border rounded-lg relative overflow-hidden min-h-[440px] flex flex-col">
+            <!-- 3D Canvas Container -->
+            <div id="viewport3d" class="w-full flex-1 relative cursor-grab active:cursor-grabbing min-h-[380px]">
+                
+                <!-- TOP HUD RIGHT: Navigation Controls -->
+                <div class="absolute top-2.5 right-2.5 hud-overlay rounded-lg p-2 flex flex-col items-center gap-1.5 shadow-lg z-10">
+                    <div class="text-[9px] uppercase font-bold text-slate-400">Navegación</div>
+                    <div class="grid grid-cols-3 gap-1 w-20 h-20 text-xs">
+                        <div></div>
+                        <button onclick="rotateCam('top')" class="bg-slate-800 hover:bg-slate-700 rounded text-slate-300 flex items-center justify-center p-1" title="Vista Superior">
+                            <i class="fa-solid fa-chevron-up"></i>
+                        </button>
+                        <div></div>
+                        <button onclick="rotateCam('left')" class="bg-slate-800 hover:bg-slate-700 rounded text-slate-300 flex items-center justify-center p-1" title="Vista Izquierda">
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                        <button onclick="resetCameraView()" class="bg-blue-600 hover:bg-blue-500 text-white rounded flex items-center justify-center p-1" title="Restablecer Isometrica">
+                            <i class="fa-solid fa-house"></i>
+                        </button>
+                        <button onclick="rotateCam('right')" class="bg-slate-800 hover:bg-slate-700 rounded text-slate-300 flex items-center justify-center p-1" title="Vista Derecha">
+                            <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                        <div></div>
+                        <button onclick="rotateCam('front')" class="bg-slate-800 hover:bg-slate-700 rounded text-slate-300 flex items-center justify-center p-1" title="Vista Frontal">
+                            <i class="fa-solid fa-chevron-down"></i>
+                        </button>
+                        <div></div>
+                    </div>
+                    <div class="w-full pt-1 border-t border-slate-700 flex items-center gap-1 justify-center">
+                        <i class="fa-solid fa-magnifying-glass text-[9px] text-slate-400"></i>
+                        <input id="zoomRange" type="range" min="3" max="14" step="0.1" value="7.5" class="w-16 h-1 bg-slate-700 rounded appearance-none cursor-pointer">
+                    </div>
+                </div>
+
+                <!-- TOP HUD LEFT: Active Sensor Tag & Mode -->
+                <div class="absolute top-2.5 left-2.5 hud-overlay rounded-md px-3 py-1.5 flex items-center gap-2 z-10 border border-purple-500/30">
+                    <div id="sensorPingDot" class="w-2.5 h-2.5 rounded-full bg-purple-500 animate-ping"></div>
+                    <div>
+                        <span class="text-[9px] text-slate-400 block uppercase font-bold tracking-wider">Canal de Medición Activo</span>
+                        <span id="activeSensorLabel" class="text-xs font-black text-purple-300">Sensor 1 - Motor DE (Eje X)</span>
+                    </div>
+                </div>
+
+                <!-- FLOATING HUD MATRIX: SENSOR SELECTION TABLE -->
+                <div class="absolute bottom-2.5 right-2.5 hud-overlay rounded-lg p-2 shadow-xl z-10 border border-slate-700">
+                    <div class="text-[11px] font-bold text-slate-300 mb-1 flex justify-between items-center border-b border-slate-800 pb-1">
+                        <span>Puntos de Medición</span>
+                        <i class="fa-solid fa-microchip text-purple-400 text-xs"></i>
+                    </div>
+                    <table class="text-xs text-center border-separate border-spacing-1">
+                        <thead>
+                            <tr class="text-slate-400 text-[9px] font-mono">
+                                <th class="px-1 text-left">Posición</th>
+                                <th class="px-1.5" title="Eje X: Perpendicular al Skid (Radial Horizontal)">X (Perp)</th>
+                                <th class="px-1.5" title="Eje Y: Vertical (Perpendicular a la base)">Y (Vert)</th>
+                                <th class="px-1.5" title="Eje Z: Axial">Z (Axial)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sensorMatrixBody">
+                            <!-- Matrix rows generated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- FLOATING HUD LEFT BOTTOM: High Frequency Status Box -->
+                <div class="absolute bottom-2.5 left-2.5 hud-overlay rounded-lg p-2 z-10 border border-amber-500/30 text-[10px] w-48 hidden sm:block">
+                    <div class="font-bold text-amber-400 flex items-center gap-1 mb-0.5">
+                        <i class="fa-solid fa-bolt"></i> Modulación de Altas Frecuencias
+                    </div>
+                    <div class="text-slate-300 font-mono flex justify-between">
+                        <span>Nivel gSE / PeakVue:</span>
+                        <strong id="hudGseVal" class="text-amber-300">0.05 gPk</strong>
+                    </div>
+                    <div class="text-slate-300 font-mono flex justify-between">
+                        <span>Frec. Impactos:</span>
+                        <strong id="hudImpactFreq" class="text-purple-300">N/A</strong>
+                    </div>
+                </div>
+
+                <!-- 3D Overlay Loading Notice -->
+                <div id="loader3d" class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center gap-2 z-20 transition-opacity duration-300">
+                    <div class="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p class="text-xs text-slate-300 font-semibold">Cargando Modelo 3D RKD1 Digital...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT COLUMN: SIGNAL ANALYSIS & CHARTS (5 Cols) -->
+        <section class="lg:col-span-5 flex flex-col gap-2">
+            
+            <!-- SIGNAL ANALYZER CARD WITH TABS -->
+            <div class="bg-panel-bg bevel-border rounded-lg p-2.5 flex flex-col flex-1 gap-2">
+                
+                <!-- Tab Selector for Signal Analysis -->
+                <div class="flex items-center justify-between border-b border-slate-700 pb-1">
+                    <div class="flex gap-1 text-xs font-bold">
+                        <button id="tabBtnWaveform" onclick="switchSignalTab('time')" class="tab-btn active px-2.5 py-1 rounded-t flex items-center gap-1.5 text-slate-300 hover:text-white">
+                            <i class="fa-solid fa-wave-square text-purple-400"></i> Onda Tiempo
+                        </button>
+                        <button id="tabBtnSpectrum" onclick="switchSignalTab('fft')" class="tab-btn px-2.5 py-1 rounded-t flex items-center gap-1.5 text-slate-300 hover:text-white">
+                            <i class="fa-solid fa-chart-column text-blue-400"></i> Espectro FFT
+                        </button>
+                        <button id="tabBtnDemod" onclick="switchSignalTab('demod')" class="tab-btn px-2.5 py-1 rounded-t flex items-center gap-1.5 text-slate-300 hover:text-white" title="Análisis de Demodulación / Envolvente / gSE PeakVue para Rodamientos">
+                            <i class="fa-solid fa-bolt text-amber-400"></i> Altas Frecuencias
+                        </button>
+                    </div>
+                    <span id="unitsDisplay" class="text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-700">
+                        mm/s RMS
+                    </span>
+                </div>
+
+                <!-- TOP CHART: TIME WAVEFORM CANVAS -->
+                <div id="containerTime" class="flex flex-col h-[180px] relative bg-canvas-bg rounded border border-slate-800 p-1.5">
+                    <div class="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                        <span class="font-bold text-slate-300"><i class="fa-solid fa-clock text-purple-400 mr-1"></i> Forma de Onda en el Tiempo (ms)</span>
+                        <span id="timePeakDisplay" class="font-mono font-bold text-purple-300 bg-purple-950/80 px-1.5 py-0.5 rounded border border-purple-800">
+                            Pk-Pk: 0.00 µm
+                        </span>
+                    </div>
+                    <div class="flex-1 relative overflow-hidden">
+                        <canvas id="timeCanvas" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <!-- BOTTOM CHART: FFT SPECTRUM OR DEMODULATION SPECTRUM CANVAS -->
+                <div id="containerSpectrum" class="flex flex-col h-[200px] relative bg-canvas-bg rounded border border-slate-800 p-1.5">
+                    <div class="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                        <div class="flex items-center gap-2">
+                            <span id="spectrumTitle" class="font-bold text-slate-300"><i class="fa-solid fa-chart-line text-blue-400 mr-1"></i> Espectro de Frecuencia Velocidad (CPM)</span>
+                            <span id="scaleBadge" class="bg-blue-950/80 text-blue-300 text-[9px] font-mono px-1.5 py-0.5 rounded border border-blue-800">
+                                Escala Y: Auto
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-400 hidden sm:inline">Fmax: <strong id="fmaxLabel" class="text-slate-200 font-mono">24,000 CPM</strong></span>
+                            <span id="spectrumCursorVal" class="font-mono text-xs text-amber-300 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700">0 CPM | 0.00 mm/s</span>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative overflow-hidden cursor-crosshair">
+                        <canvas id="spectrumCanvas" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <!-- HIGH FREQUENCY DEMODULATION / ENVELOPE PANEL (VISIBLE IN 'DEMOD' TAB OR TOGGLED) -->
+                <div id="containerDemod" class="hidden flex-col h-[380px] relative bg-canvas-bg rounded border border-amber-900/50 p-2 gap-2">
+                    <div class="flex items-center justify-between text-[11px] border-b border-slate-800 pb-1">
+                        <div class="flex items-center gap-1.5">
+                            <i class="fa-solid fa-microchip text-amber-400"></i>
+                            <span class="font-bold text-amber-300">Análisis Demodulado de Altas Frecuencias (PeakVue / gSE / Envolvente)</span>
+                        </div>
+                        <span class="text-[10px] bg-amber-950/80 text-amber-300 font-mono px-2 py-0.5 rounded border border-amber-800">
+                            Filtro Pasa-Alto: 5 kHz - 40 kHz
+                        </span>
+                    </div>
+
+                    <!-- Demodulation Waveform Canvas -->
+                    <div class="flex-1 bg-slate-950 rounded border border-slate-800 relative flex flex-col p-1">
+                        <div class="text-[9px] text-amber-400 font-mono font-bold flex justify-between">
+                            <span>Señal Demodulada (Impulsos de Aceleración gPk)</span>
+                            <span id="gsePeakLabel">gSE: 0.12 gPk</span>
+                        </div>
+                        <canvas id="demodTimeCanvas" class="w-full h-full flex-1"></canvas>
+                    </div>
+
+                    <!-- Demodulation Spectrum Canvas -->
+                    <div class="flex-1 bg-slate-950 rounded border border-slate-800 relative flex flex-col p-1">
+                        <div class="text-[9px] text-purple-400 font-mono font-bold flex justify-between">
+                            <span>Espectro Envolvente / Altas Frecuencias (CPM) - Diagnóstico Defecto Rodamiento</span>
+                            <span id="bearingHarmonicLabel">Armónicos BPFO / BPFI</span>
+                        </div>
+                        <canvas id="demodSpectrumCanvas" class="w-full h-full flex-1"></canvas>
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- BOTTOM ROW: CONTROLS, DIAGNOSTICS & THEORY -->
+    <footer class="grid grid-cols-1 lg:grid-cols-12 gap-2.5">
+        
+        <!-- LEFT CONTROL & DIAGNOSTIC CARD (5 Cols) -->
+        <div class="lg:col-span-5 bg-panel-bg bevel-border rounded-lg p-2.5 grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-center">
+            
+            <!-- Motor Speed & Vibration Controls -->
+            <div class="flex flex-col gap-1.5 bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                <div class="flex items-center gap-1.5 border-b border-slate-800 pb-1">
+                    <i class="fa-solid fa-sliders text-blue-400 text-xs"></i>
+                    <span class="text-xs font-bold text-slate-200">Parámetros Operativos</span>
+                </div>
+                
+                <!-- Speed Controls -->
+                <div class="flex items-center justify-between gap-1">
+                    <label class="text-[11px] text-slate-400 font-semibold">Velocidad Motor:</label>
+                    <div class="flex items-center gap-1">
+                        <button onclick="adjustHz(-5)" class="w-6 h-6 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold text-xs">-</button>
+                        <input id="hzInput" type="number" min="0" max="120" value="30" class="w-14 bg-slate-950 text-emerald-400 font-mono font-bold text-center border border-slate-700 rounded text-xs py-0.5 focus:outline-none">
+                        <button onclick="adjustHz(5)" class="w-6 h-6 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold text-xs">+</button>
+                        <span class="text-[10px] font-bold text-slate-400">Hz</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                    <span class="text-[10px] text-slate-400">Velocidad Rotación:</span>
+                    <span id="rpmDisplay" class="font-mono font-bold text-blue-400 text-[11px]">1800 CPM (1800 RPM)</span>
+                </div>
+
+                <!-- Amplitude Control -->
+                <div class="flex items-center justify-between gap-1 border-t border-slate-800 pt-1">
+                    <label class="text-[11px] text-slate-400 font-semibold">Magnitud de Vibración RMS:</label>
+                    <div class="flex items-center gap-1">
+                        <button onclick="adjustAmp(-0.5)" class="w-6 h-6 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold text-xs">-</button>
+                        <input id="ampInput" type="number" min="0.1" max="30" step="0.5" value="4.5" class="w-14 bg-slate-950 text-amber-400 font-mono font-bold text-center border border-slate-700 rounded text-xs py-0.5 focus:outline-none">
+                        <button onclick="adjustAmp(0.5)" class="w-6 h-6 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold text-xs">+</button>
+                        <span class="text-[9px] font-bold text-slate-400">mm/s</span>
+                    </div>
+                </div>
+
+                <!-- Fan Blades Control -->
+                <div class="flex items-center justify-between gap-1 border-t border-slate-800 pt-1">
+                    <label class="text-[11px] text-slate-400 font-semibold">N° de Álabes:</label>
+                    <div class="flex items-center gap-1">
+                        <button onclick="adjustBlades(-1)" class="w-6 h-6 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold text-xs">-</button>
+                        <input id="bladesInput" type="number" min="2" max="16" value="6" class="w-14 bg-slate-950 text-purple-400 font-mono font-bold text-center border border-slate-700 rounded text-xs py-0.5 focus:outline-none">
+                        <button onclick="adjustBlades(1)" class="w-6 h-6 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold text-xs">+</button>
+                    </div>
+                </div>
+
+                <!-- Condition Selector -->
+                <div class="flex flex-col gap-1 pt-1 border-t border-slate-800">
+                    <label for="faultSelect" class="text-[9px] text-slate-400 uppercase font-bold">Simular Condición de Falla:</label>
+                    <select id="faultSelect" class="bg-slate-800 text-xs text-slate-100 p-1 rounded border border-slate-700 font-semibold focus:outline-none cursor-pointer">
+                        <option value="ideal">Condición Ideal / Normal</option>
+                        <option value="unbalance">Desbalance de Masa (1X Elevado)</option>
+                        <option value="misalignment">Desalineación Severa (2X y Axial 1X/2X)</option>
+                        <option value="bearing">Falla Rodamiento (Altas Frecuencias BPFO)</option>
+                        <option value="bpf">Paso de Álabes (BPF = N × 1X)</option>
+                        <option value="cavitation">Cavitación / Fricción de Alta Frecuencia</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Assembly Status Badge -->
+            <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 flex flex-col items-center justify-center text-center gap-1 h-full min-h-[140px]">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado del Montaje</span>
+                
+                <div id="statusIconContainer" class="w-12 h-12 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center text-emerald-400 text-xl my-0.5 transition-all">
+                    <i id="statusIcon" class="fa-solid fa-check"></i>
+                </div>
+
+                <span id="statusTitle" class="text-xs font-bold text-emerald-400">En Perfecta Condición</span>
+                <p id="statusDesc" class="text-[10px] text-slate-400 leading-tight">La máquina se encuentra en parámetros normales de operación según ISO 20816.</p>
+            </div>
+
+        </div>
+
+        <!-- RIGHT THEORY & INSIGHTS PANEL (7 Cols) -->
+        <div class="lg:col-span-7 bg-panel-bg bevel-border rounded-lg p-2.5 flex flex-col md:flex-row gap-2.5">
+            
+            <!-- Dynamic Theory Text Box -->
+            <div class="flex-1 bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 flex flex-col gap-1 overflow-y-auto max-h-[160px]">
+                <div class="flex items-center gap-1.5 border-b border-slate-800 pb-1">
+                    <i class="fa-solid fa-book-open text-amber-400 text-xs"></i>
+                    <span class="text-xs font-bold text-slate-200">Teoría y Diagnóstico Técnico RKD1 Digital</span>
+                </div>
+                <h4 id="theoryTitle" class="text-xs font-bold text-amber-300 mt-0.5">Standard - Condición Base</h4>
+                <p id="theoryBody" class="text-[11px] text-slate-300 leading-relaxed">
+                    La máquina se encuentra en condiciones ideales de trabajo. Toda máquina rotatoria presenta algún nivel residual de vibración armónica a 1X por imperfecciones constructivas.
+                </p>
+            </div>
+
+            <!-- Mini Reference Spectra / ISO Standards -->
+            <div class="w-full md:w-56 bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 flex flex-col gap-1.5 justify-between">
+                <div class="text-[10px] font-bold text-slate-400 flex items-center justify-between border-b border-slate-800 pb-1">
+                    <span>Evaluación ISO 20816-3</span>
+                    <i class="fa-solid fa-gauge text-purple-400"></i>
+                </div>
+                
+                <!-- ISO Severity Bar -->
+                <div class="space-y-1 my-0.5">
+                    <div class="flex justify-between text-[10px]">
+                        <span id="isoFoundationType" class="text-slate-400 font-semibold">Base Rígida:</span>
+                        <span id="isoZoneText" class="font-bold text-emerald-400">Zona A (Bueno)</span>
+                    </div>
+                    <!-- Dynamic ISO Zone Progress Bar -->
+                    <div class="w-full bg-slate-950 h-3.5 rounded-full overflow-hidden flex p-0.5 border border-slate-800 relative">
+                        <div id="isoBarA" class="bg-emerald-500 h-full rounded-l transition-all duration-300 opacity-90" style="width: 25%"></div>
+                        <div id="isoBarB" class="bg-yellow-500 h-full transition-all duration-300 opacity-30" style="width: 25%"></div>
+                        <div id="isoBarC" class="bg-orange-500 h-full transition-all duration-300 opacity-30" style="width: 25%"></div>
+                        <div id="isoBarD" class="bg-red-600 h-full rounded-r transition-all duration-300 opacity-30" style="width: 25%"></div>
+                    </div>
+                    <div id="isoThresholdLabels" class="flex justify-between text-[8px] text-slate-400 font-mono">
+                        <span>0</span>
+                        <span>1.4</span>
+                        <span>2.8</span>
+                        <span>4.5+ mm/s</span>
+                    </div>
+                </div>
+
+                <div class="bg-slate-950 p-1 rounded border border-slate-800 text-[9px] text-slate-400 flex justify-between items-center">
+                    <span>Sensor Industrial:</span>
+                    <strong class="text-purple-300 font-mono">Acelerómetro 100 mV/g</strong>
+                </div>
+            </div>
+
+        </div>
+
+    </footer>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // Global Application State
+        const state = {
+            hz: 30,
+            rpm: 1800,
+            cpm: 1800,
+            amplitude: 4.5, // Base amplitude setting in mm/s RMS
+            blades: 6, // Number of fan blades
+            isPlaying: true,
+            fault: 'ideal', // 'ideal', 'unbalance', 'misalignment', 'bearing', 'bpf', 'cavitation'
+            montaje: 'standard', // 'standard', 'flexible', 'overhung'
+            sensorPos: 1, // 1 to 4
+            sensorAxis: 'X', // 'X', 'Y', 'Z'
+            activeSensorName: 'Sensor 1 - Motor DE (Eje X)',
+            activeTab: 'time', // 'time', 'fft', 'demod'
+            
+            // Audio synthesis
+            audioEnabled: false,
+            audioCtx: null,
+            oscillator: null,
+            gainNode: null,
+            noiseNode: null,
+
+            // Physical rotation angles & signal phase
+            angle: 0,
+            timeStep: 0,
+            
+            // Cursor interaction on canvas
+            spectrumHoverCPM: 0,
+            spectrumHoverAmp: 0
+        };
+
+        // Sensor position names map
+        const sensorNames = {
+            1: 'Motor NDE (Lado No Acoplado)',
+            2: 'Motor DE (Lado Acoplado)',
+            3: 'Ventilador/Bomba DE (Lado Acoplado)',
+            4: 'Ventilador/Bomba NDE (Lado Libre / Voladizo)'
+        };
+
+        // DOM Element References
+        const hzInput = document.getElementById('hzInput');
+        const ampInput = document.getElementById('ampInput');
+        const bladesInput = document.getElementById('bladesInput');
+        const rpmDisplay = document.getElementById('rpmDisplay');
+        const faultSelect = document.getElementById('faultSelect');
+        const montajeSelect = document.getElementById('montajeSelect');
+        const activeSensorLabel = document.getElementById('activeSensorLabel');
+        const statusIconContainer = document.getElementById('statusIconContainer');
+        const statusIcon = document.getElementById('statusIcon');
+        const statusTitle = document.getElementById('statusTitle');
+        const statusDesc = document.getElementById('statusDesc');
+        const theoryTitle = document.getElementById('theoryTitle');
+        const theoryBody = document.getElementById('theoryBody');
+        const isoZoneText = document.getElementById('isoZoneText');
+        const isoFoundationType = document.getElementById('isoFoundationType');
+        const isoBarA = document.getElementById('isoBarA');
+        const isoBarB = document.getElementById('isoBarB');
+        const isoBarC = document.getElementById('isoBarC');
+        const isoBarD = document.getElementById('isoBarD');
+        const btnPlayPause = document.getElementById('btnPlayPause');
+        const playIcon = document.getElementById('playIcon');
+        const playText = document.getElementById('playText');
+        const timePeakDisplay = document.getElementById('timePeakDisplay');
+        const spectrumCursorVal = document.getElementById('spectrumCursorVal');
+        const sensorMatrixBody = document.getElementById('sensorMatrixBody');
+        const loader3d = document.getElementById('loader3d');
+
+        // Canvases
+        const timeCanvas = document.getElementById('timeCanvas');
+        const timeCtx = timeCanvas.getContext('2d');
+        const spectrumCanvas = document.getElementById('spectrumCanvas');
+        const spectrumCtx = spectrumCanvas.getContext('2d');
+        const demodTimeCanvas = document.getElementById('demodTimeCanvas');
+        const demodTimeCtx = demodTimeCanvas.getContext('2d');
+        const demodSpectrumCanvas = document.getElementById('demodSpectrumCanvas');
+        const demodSpectrumCtx = demodSpectrumCanvas.getContext('2d');
+
+        // -------------------------------------------------------------
+        // THREE.JS 3D ENGINE INITIALIZATION
+        // -------------------------------------------------------------
+        const container3d = document.getElementById('viewport3d');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f141d);
+
+        // Camera
+        const camera = new THREE.PerspectiveCamera(45, container3d.clientWidth / container3d.clientHeight, 0.1, 100);
+        camera.position.set(6, 4.5, 7.5);
+
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(container3d.clientWidth, container3d.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container3d.appendChild(renderer.domElement);
+
+        // Orbit Controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 + 0.05;
+        controls.minDistance = 2;
+        controls.maxDistance = 16;
+        controls.target.set(0, 0.5, 0);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        dirLight.position.set(8, 12, 6);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        scene.add(dirLight);
+
+        const bluePointLight = new THREE.PointLight(0x3b82f6, 1.2, 10);
+        bluePointLight.position.set(-2, 3, 2);
+        scene.add(bluePointLight);
+
+        const purplePointLight = new THREE.PointLight(0x8b5cf6, 1.0, 10);
+        purplePointLight.position.set(3, 3, -2);
+        scene.add(purplePointLight);
+
+        // Grid & Ground Floor
+        const gridHelper = new THREE.GridHelper(20, 20, 0x334155, 0x1e293b);
+        gridHelper.position.y = -0.01;
+        scene.add(gridHelper);
+
+        // Groups
+        const machineGroup = new THREE.Group();
+        const rotatingShaftGroup = new THREE.Group();
+        // Position rotating shaft group exactly at centerline height (Y = 0.75)
+        rotatingShaftGroup.position.set(0, 0.75, 0);
+
+        const fanGroup = new THREE.Group();
+        scene.add(machineGroup);
+        machineGroup.add(rotatingShaftGroup);
+        rotatingShaftGroup.add(fanGroup);
+
+        // Procedural Metallic Texture
+        function createBrushedShaftTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            const grad = ctx.createLinearGradient(0, 0, 512, 0);
+            grad.addColorStop(0.0, '#ffffff');
+            grad.addColorStop(0.2, '#666666');
+            grad.addColorStop(0.4, '#ffffff');
+            grad.addColorStop(0.6, '#333333');
+            grad.addColorStop(0.8, '#cccccc');
+            grad.addColorStop(1.0, '#ffffff');
+            
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 512, 512);
+
+            for (let i = 0; i < 500; i++) {
+                const x = Math.random() * 512;
+                const w = Math.random() * 2 + 1;
+                ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.25})`;
+                ctx.fillRect(x, 0, w, 512);
+                ctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.25})`;
+                ctx.fillRect(x + 1, 0, w, 512);
+            }
+
+            // Keyway notch for high rotation visibility
+            ctx.fillStyle = '#111111';
+            ctx.fillRect(240, 0, 24, 512);
+            ctx.fillStyle = '#666666';
+            ctx.fillRect(264, 0, 4, 512);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        const shaftTextureMap = createBrushedShaftTexture();
+
+        // Materials
+        const materials = {
+            basePlate: new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5, metalness: 0.8 }),
+            flexibleBase: new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.4, metalness: 0.6 }), // Red for flexible test bench
+            motorBody: new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.3, metalness: 0.6 }),
+            motorFins: new THREE.MeshStandardMaterial({ color: 0x1e40af, roughness: 0.4, metalness: 0.5 }),
+            shaftMetal: new THREE.MeshStandardMaterial({ 
+                color: 0xeeeeee, 
+                roughness: 0.2, 
+                metalness: 0.9,
+                map: shaftTextureMap
+            }),
+            fanBlade: new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3, metalness: 0.7 }),
+            fanHub: new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, metalness: 0.8 }),
+            bearingPedestal: new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.6, metalness: 0.4 }),
+            bearingHousing: new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.4, metalness: 0.7 }),
+            couplingDisc: new THREE.MeshStandardMaterial({ 
+                color: 0x94a3b8, 
+                roughness: 0.25, 
+                metalness: 0.85
+            }),
+            sensorInactive: new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.8, roughness: 0.3 }),
+            sensorActive: new THREE.MeshStandardMaterial({ color: 0xa855f7, emissive: 0x7e22ce, emissiveIntensity: 0.9 })
+        };
+
+        // Sensor Probes Storage
+        const sensor3dMeshes = {};
+        let motorMeshGroup, bearing3Group, bearing4Group, shaftMesh;
+
+        function build3DScene() {
+            // Clear previous objects
+            while (machineGroup.children.length > 0) {
+                machineGroup.remove(machineGroup.children[0]);
+            }
+            while (rotatingShaftGroup.children.length > 0) {
+                rotatingShaftGroup.remove(rotatingShaftGroup.children[0]);
+            }
+
+            // Set rotating shaft group centerline height to Y = 0.75
+            rotatingShaftGroup.position.set(0, 0.75, 0);
+
+            // Re-attach rotatingShaftGroup to machineGroup and fanGroup to rotatingShaftGroup
+            machineGroup.add(rotatingShaftGroup);
+            rotatingShaftGroup.add(fanGroup);
+
+            // 1. BASEPLATE ASSEMBLY
+            const isFlex = state.montaje === 'flexible';
+            const isOverhung = state.montaje === 'overhung';
+            const baseMat = isFlex ? materials.flexibleBase : materials.basePlate;
+            
+            let posChumacera4X = isOverhung ? 0.95 : 1.75;
+            const skidStartX = -3.5;
+            const skidEndX = posChumacera4X + 0.25;
+            const skidLength = skidEndX - skidStartX;
+            const skidCenterX = (skidStartX + skidEndX) / 2;
+
+            const basePlateGeo = new THREE.BoxGeometry(skidLength, 0.2, 2.2);
+            const basePlate = new THREE.Mesh(basePlateGeo, baseMat);
+            basePlate.position.set(skidCenterX, 0.1, 0);
+            basePlate.receiveShadow = true;
+            machineGroup.add(basePlate);
+
+            // Flexible feet dampers if flexible base selected
+            if (isFlex) {
+                const springGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.2, 12);
+                const springMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.9 });
+                const xMin = skidStartX + 0.3;
+                const xMax = skidEndX - 0.3;
+                [[xMin, -0.9], [xMin, 0.9], [xMax, -0.9], [xMax, 0.9]].forEach(([x, z]) => {
+                    const damp = new THREE.Mesh(springGeo, springMat);
+                    damp.position.set(x, 0, z);
+                    machineGroup.add(damp);
+                });
+            }
+
+            // 2. ELECTRIC MOTOR ASSEMBLY (Left Side)
+            motorMeshGroup = new THREE.Group();
+            motorMeshGroup.position.set(-2.1, 0.75, 0);
+
+            const motorBodyGeo = new THREE.CylinderGeometry(0.65, 0.65, 1.5, 32);
+            motorBodyGeo.rotateZ(Math.PI / 2);
+            const motorBody = new THREE.Mesh(motorBodyGeo, materials.motorBody);
+            motorBody.castShadow = true;
+            motorMeshGroup.add(motorBody);
+
+            // Motor Cooling Fins
+            for (let i = 0; i < 8; i++) {
+                const finGeo = new THREE.BoxGeometry(1.4, 0.05, 1.4);
+                const fin = new THREE.Mesh(finGeo, materials.motorFins);
+                fin.rotation.x = (Math.PI / 8) * i;
+                motorMeshGroup.add(fin);
+            }
+
+            // Motor Terminal Box
+            const termBoxGeo = new THREE.BoxGeometry(0.4, 0.3, 0.4);
+            const termBox = new THREE.Mesh(termBoxGeo, materials.bearingPedestal);
+            termBox.position.set(0, 0.75, 0);
+            motorMeshGroup.add(termBox);
+
+            machineGroup.add(motorMeshGroup);
+
+            // Motor Shaft Extension
+            const motorShaftGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.75, 24);
+            motorShaftGeo.rotateZ(Math.PI / 2);
+            const motorShaft = new THREE.Mesh(motorShaftGeo, materials.shaftMetal);
+            motorShaft.position.set(-1.125, 0, 0);
+            motorShaft.castShadow = true;
+            rotatingShaftGroup.add(motorShaft);
+
+            // 3. FLEXIBLE COUPLING (ACOPLAMIENTO)
+            const couplingGroup = new THREE.Group();
+            couplingGroup.position.set(-0.75, 0, 0);
+
+            const couplingGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.25, 24);
+            couplingGeo.rotateZ(Math.PI / 2);
+            const coupling = new THREE.Mesh(couplingGeo, materials.couplingDisc);
+            coupling.castShadow = true;
+            couplingGroup.add(coupling);
+
+            // Coupling bolts
+            for (let i = 0; i < 4; i++) {
+                const boltGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.28, 8);
+                boltGeo.rotateZ(Math.PI / 2);
+                const boltMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.8 });
+                const bolt = new THREE.Mesh(boltGeo, boltMat);
+                const bAngle = (Math.PI / 2) * i;
+                bolt.position.set(0, Math.sin(bAngle) * 0.18, Math.cos(bAngle) * 0.18);
+                couplingGroup.add(bolt);
+            }
+            rotatingShaftGroup.add(couplingGroup);
+
+            // 4. MAIN DRIVEN SHAFT
+            const shaftLength = 3.3;
+            const shaftCenterX = 0.85;
+
+            const shaftGeo = new THREE.CylinderGeometry(0.12, 0.12, shaftLength, 32);
+            shaftGeo.rotateZ(Math.PI / 2);
+            shaftMesh = new THREE.Mesh(shaftGeo, materials.shaftMetal);
+            shaftMesh.position.set(shaftCenterX, 0, 0);
+            shaftMesh.castShadow = true;
+            rotatingShaftGroup.add(shaftMesh);
+
+            // 5. CHUMACERAS / PILLOW BLOCK BEARING HOUSINGS
+            function createBearingPedestal(posX, label) {
+                const group = new THREE.Group();
+                group.position.set(posX, 0.2, 0);
+
+                const pedGeo = new THREE.BoxGeometry(0.35, 0.5, 0.85);
+                const ped = new THREE.Mesh(pedGeo, materials.bearingPedestal);
+                ped.position.y = 0.25;
+                ped.castShadow = true;
+                group.add(ped);
+
+                const capGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.36, 24);
+                capGeo.rotateZ(Math.PI / 2);
+                const cap = new THREE.Mesh(capGeo, materials.bearingHousing);
+                cap.position.y = 0.55;
+                cap.castShadow = true;
+                group.add(cap);
+
+                const alemitaGeo = new THREE.CylinderGeometry(0.02, 0.03, 0.12, 8);
+                const alemitaMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.9 });
+                const alemita = new THREE.Mesh(alemitaGeo, alemitaMat);
+                alemita.position.set(0, 0.85, 0);
+                group.add(alemita);
+
+                const boltMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.8 });
+                [-0.32, 0.32].forEach(zOffset => {
+                    const boltGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.15, 8);
+                    const bolt = new THREE.Mesh(boltGeo, boltMat);
+                    bolt.position.set(0, 0.52, zOffset);
+                    group.add(bolt);
+                });
+
+                return group;
+            }
+
+            const posChumacera3X = -0.15;
+            posChumacera4X = isOverhung ? 0.95 : 1.75;
+
+            bearing3Group = createBearingPedestal(posChumacera3X, "Chumacera 3 (DE)");
+            bearing4Group = createBearingPedestal(posChumacera4X, "Chumacera 4 (NDE)");
+
+            machineGroup.add(bearing3Group);
+            machineGroup.add(bearing4Group);
+
+            // 6. VENTILADOR / IMPELER ASSEMBLY
+            updateFan3D();
+
+            // 7. SENSOR PROBES IN 3D
+            build3DSensorProbes();
+
+            // Hide loader
+            setTimeout(() => {
+                if (loader3d) loader3d.style.opacity = '0';
+                setTimeout(() => { if (loader3d) loader3d.style.display = 'none'; }, 300);
+            }, 300);
+        }
+
+        function updateFan3D() {
+            while (fanGroup.children.length > 0) {
+                fanGroup.remove(fanGroup.children[0]);
+            }
+
+            const fanX = 2.45;
+            fanGroup.position.set(fanX, 0, 0);
+
+            const hubGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.28, 32);
+            hubGeo.rotateZ(Math.PI / 2);
+            const hub = new THREE.Mesh(hubGeo, materials.fanHub);
+            hub.castShadow = true;
+            fanGroup.add(hub);
+
+            const capGeo = new THREE.CylinderGeometry(0.18, 0.22, 0.10, 16);
+            capGeo.rotateZ(Math.PI / 2);
+            const capMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.9, roughness: 0.2 });
+            const cap = new THREE.Mesh(capGeo, capMat);
+            cap.position.set(0.16, 0, 0);
+            fanGroup.add(cap);
+
+            const ringGeo = new THREE.TorusGeometry(0.92, 0.025, 16, 48);
+            ringGeo.rotateY(Math.PI / 2);
+            const ringMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.7, roughness: 0.3 });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            fanGroup.add(ring);
+
+            const numBlades = state.blades;
+            const bladeMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.25, metalness: 0.75 });
+            const tipMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.3, metalness: 0.8 });
+            const boltMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9 });
+
+            for (let i = 0; i < numBlades; i++) {
+                const angle = (Math.PI * 2 / numBlades) * i;
+                const bladeGroup = new THREE.Group();
+
+                const bladeGeo = new THREE.BoxGeometry(0.10, 0.58, 0.20);
+                const blade = new THREE.Mesh(bladeGeo, bladeMat);
+                blade.position.y = 0.50;
+                blade.rotation.x = 0.35;
+                blade.castShadow = true;
+                bladeGroup.add(blade);
+
+                const tipGeo = new THREE.BoxGeometry(0.11, 0.10, 0.21);
+                const tip = new THREE.Mesh(tipGeo, tipMat);
+                tip.position.y = 0.79;
+                tip.rotation.x = 0.35;
+                bladeGroup.add(tip);
+
+                const rootGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.12, 8);
+                const rootBolt = new THREE.Mesh(rootGeo, boltMat);
+                rootBolt.position.y = 0.20;
+                bladeGroup.add(rootBolt);
+
+                bladeGroup.rotation.x = angle;
+                fanGroup.add(bladeGroup);
+            }
+        }
+
+        function build3DSensorProbes() {
+            Object.keys(sensor3dMeshes).forEach(key => {
+                if (sensor3dMeshes[key].parent) {
+                    sensor3dMeshes[key].parent.remove(sensor3dMeshes[key]);
+                }
+            });
+
+            const isOverhung = state.montaje === 'overhung';
+            
+            const posCoords = {
+                1: { x: -2.70, y: 0.75, z: 0 },
+                2: { x: -1.50, y: 0.75, z: 0 },
+                3: { x: -0.15, y: 0.75, z: 0 },
+                4: { x: isOverhung ? 0.95 : 1.75, y: 0.75, z: 0 }
+            };
+
+            for (let p = 1; p <= 4; p++) {
+                const basePos = posCoords[p];
+                const isMotorPoint = (p <= 2);
+
+                const radOffsetY = isMotorPoint ? 0.74 : 0.37;
+                const radOffsetX = isMotorPoint ? 0.74 : 0.37;
+
+                ['X', 'Y', 'Z'].forEach(axis => {
+                    const key = `${p}_${axis}`;
+                    const sensorGroup = new THREE.Group();
+
+                    const bodyGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.16, 16);
+                    const magBaseGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.03, 16);
+                    
+                    const isSelected = (state.sensorPos === p && state.sensorAxis === axis);
+                    const mat = isSelected ? materials.sensorActive : materials.sensorInactive;
+                    const magMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9, roughness: 0.2 });
+
+                    const sensorMesh = new THREE.Mesh(bodyGeo, mat);
+                    const magMesh = new THREE.Mesh(magBaseGeo, magMat);
+                    magMesh.position.y = -0.095;
+                    sensorMesh.add(magMesh);
+
+                    if (axis === 'X') {
+                        sensorMesh.rotation.x = Math.PI / 2;
+                        sensorGroup.position.set(basePos.x, basePos.y, basePos.z + radOffsetX);
+                    } else if (axis === 'Y') {
+                        sensorMesh.rotation.set(0, 0, 0);
+                        sensorGroup.position.set(basePos.x, basePos.y + radOffsetY, basePos.z);
+                    } else if (axis === 'Z') {
+                        sensorMesh.rotation.z = Math.PI / 2;
+                        
+                        if (p === 1) {
+                            sensorGroup.position.set(-2.94, basePos.y + 0.32, 0);
+                        } else if (p === 2) {
+                            sensorGroup.position.set(-1.26, basePos.y + 0.32, 0);
+                        } else {
+                            sensorGroup.position.set(basePos.x + 0.27, basePos.y + 0.15, 0);
+                        }
+                    }
+
+                    sensorGroup.add(sensorMesh);
+
+                    if (isSelected) {
+                        const ringGeo = new THREE.RingGeometry(0.07, 0.12, 16);
+                        const ringMat = new THREE.MeshBasicMaterial({ color: 0xc084fc, side: THREE.DoubleSide });
+                        const ring = new THREE.Mesh(ringGeo, ringMat);
+                        ring.rotation.x = Math.PI / 2;
+                        ring.position.y = 0.10;
+                        sensorGroup.add(ring);
+                    }
+
+                    machineGroup.add(sensorGroup);
+                    sensor3dMeshes[key] = sensorGroup;
+                });
+            }
+        }
+
+        function renderSensorMatrixUI() {
+            if (!sensorMatrixBody) return;
+            sensorMatrixBody.innerHTML = '';
+
+            const posShortNames = {
+                1: '1. Mot NDE',
+                2: '2. Mot DE',
+                3: '3. Chum DE',
+                4: '4. Chum NDE'
+            };
+
+            for (let p = 1; p <= 4; p++) {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-800/50 transition';
+
+                const tdLabel = document.createElement('td');
+                tdLabel.className = 'text-left text-[9px] font-semibold text-slate-300 pr-1.5 py-0.5 whitespace-nowrap';
+                tdLabel.innerText = posShortNames[p] || `Pos ${p}`;
+                tr.appendChild(tdLabel);
+
+                ['X', 'Y', 'Z'].forEach(axis => {
+                    const td = document.createElement('td');
+                    td.className = 'px-0.5 py-0.5';
+                    
+                    const btn = document.createElement('button');
+                    const isActive = (state.sensorPos === p && state.sensorAxis === axis);
+                    
+                    btn.className = `sensor-btn w-6 h-5 rounded text-[10px] font-mono font-bold transition flex items-center justify-center ${
+                        isActive 
+                        ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50 border border-purple-400' 
+                        : 'bg-slate-800/90 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700'
+                    }`;
+                    btn.innerText = axis;
+                    btn.title = `Seleccionar Sensor ${p} - Eje ${axis}`;
+                    btn.onclick = () => selectSensor(p, axis);
+
+                    td.appendChild(btn);
+                    tr.appendChild(td);
+                });
+
+                sensorMatrixBody.appendChild(tr);
+            }
+        }
+
+        function selectSensor(pos, axis) {
+            state.sensorPos = pos;
+            state.sensorAxis = axis;
+            state.activeSensorName = `Sensor ${pos} - ${sensorNames[pos]} (Eje ${axis})`;
+            activeSensorLabel.innerText = state.activeSensorName;
+            
+            renderSensorMatrixUI();
+            build3DSensorProbes();
+            updateDiagnosticTheory();
+        }
+
+        function rotateCam(view) {
+            if (view === 'top') {
+                camera.position.set(0, 10, 0.01);
+            } else if (view === 'left') {
+                camera.position.set(-9, 1, 0);
+            } else if (view === 'right') {
+                camera.position.set(9, 1, 0);
+            } else if (view === 'front') {
+                camera.position.set(0, 1, 9);
+            }
+            controls.target.set(0, 0.5, 0);
+            controls.update();
+        }
+
+        function resetCameraView() {
+            camera.position.set(6, 4.5, 7.5);
+            controls.target.set(0, 0.5, 0);
+            controls.update();
+            document.getElementById('zoomRange').value = 7.5;
+        }
+
+        document.getElementById('zoomRange').addEventListener('input', (e) => {
+            const dist = parseFloat(e.target.value);
+            const dir = camera.position.clone().sub(controls.target).normalize();
+            camera.position.copy(controls.target.clone().add(dir.multiplyScalar(dist)));
+            controls.update();
+        });
+
+        // -------------------------------------------------------------
+        // VIBRATION SIGNAL SYNTHESIS & MATHEMATICAL ENGINE
+        // CALIBRATED FOR UNBALANCE AMPLITUDE DIRECT CORRESPONDENCE
+        // -------------------------------------------------------------
+        function computeVibrationData() {
+            const f1X = state.hz; // Rotational Frequency in Hz
+            const ampBase = state.amplitude; // Regulated RMS vibration magnitude
+            const fault = state.fault;
+            const pos = state.sensorPos;
+            const axis = state.sensorAxis;
+            const blades = state.blades;
+
+            let harmonics = []; // Array of { mult, amp, phase, label, isHighFreq }
+
+            if (fault === 'unbalance') {
+                // FALLA DE DESBALANCE DE MASA PURA:
+                // En ejes radiales (X, Y): El pico 1X equivale exactamente a la magnitud regulada
+                // En eje axial (Z): El desbalance produce poca fuerza axial (~15% de 1X)
+                const amp1X = (axis === 'Z') ? ampBase * 0.15 : ampBase;
+                harmonics.push({ mult: 1.0, amp: amp1X, phase: 0, label: '1X Desbalance' });
+                harmonics.push({ mult: 2.0, amp: ampBase * 0.05, phase: 0.5, label: '2X Residual' });
+            } 
+            else if (fault === 'misalignment') {
+                // DESALINEACIÓN SEVERA: 1X y 2X dominantes, con alta componente en eje axial Z
+                const amp1X = (axis === 'Z') ? ampBase * 0.75 : ampBase * 0.50;
+                const amp2X = (axis === 'Z') ? ampBase * 1.00 : ampBase * 0.85;
+                harmonics.push({ mult: 1.0, amp: amp1X, phase: 0, label: '1X Rotación' });
+                harmonics.push({ mult: 2.0, amp: amp2X, phase: 0.8, label: '2X Desalineación' });
+                harmonics.push({ mult: 3.0, amp: ampBase * 0.20, phase: 1.2, label: '3X Harm' });
+            } 
+            else if (fault === 'bpf') {
+                // PASO DE ÁLABES (BPF = N × 1X)
+                harmonics.push({ mult: 1.0, amp: ampBase * 0.25, phase: 0, label: '1X Rotación' });
+                harmonics.push({ mult: blades, amp: ampBase, phase: 0.3, label: `BPF (${blades}X)` });
+                harmonics.push({ mult: blades * 2, amp: ampBase * 0.30, phase: 0.6, label: `2BPF (${blades * 2}X)` });
+            } 
+            else if (fault === 'bearing') {
+                // FALLA DE RODAMIENTO (Eje X en kHz, Eje Y en Gravedades de Envolvente gE)
+                const f1kHz = f1X / 1000;
+                const bpfo = 3.58;
+                const bpfi = 5.42;
+                const gEBase = state.amplitude * 0.45; // Magnitud calibrada en gE
+
+                harmonics.push({ mult: 1.0, freqKHz: f1kHz, amp: gEBase * 0.20, phase: 0, label: '1X Rotación' });
+                harmonics.push({ mult: bpfo, freqKHz: bpfo * f1kHz, amp: gEBase * 1.25, phase: 0.2, label: 'BPFO 1X' });
+                harmonics.push({ mult: bpfo * 2, freqKHz: bpfo * 2 * f1kHz, amp: gEBase * 0.75, phase: 0.5, label: 'BPFO 2X' });
+                harmonics.push({ mult: bpfo * 3, freqKHz: bpfo * 3 * f1kHz, amp: gEBase * 0.40, phase: 0.9, label: 'BPFO 3X' });
+                harmonics.push({ mult: bpfi, freqKHz: bpfi * f1kHz, amp: gEBase * 0.60, phase: 0.4, label: 'BPFI 1X' });
+                harmonics.push({ mult: 1.85 / f1kHz, freqKHz: 1.85, amp: gEBase * 0.80, phase: 0, label: 'Resonancia 1.85 kHz', isHighFreq: true });
+            } 
+            else if (fault === 'cavitation') {
+                // CAVITACIÓN / FRICCIÓN
+                harmonics.push({ mult: 1.0, amp: ampBase * 0.20, phase: 0, label: '1X Rotación' });
+                harmonics.push({ mult: blades, amp: ampBase * 0.50, phase: 0.1, label: 'BPF' });
+                harmonics.push({ mult: 18.5, amp: ampBase * 0.60, phase: 0.4, label: 'HF Cavitación', isHighFreq: true });
+                harmonics.push({ mult: 32.0, amp: ampBase * 0.70, phase: 0.8, label: 'Banda Ancha HF', isHighFreq: true });
+            } 
+            else { // 'ideal'
+                const amp1X = ampBase * 0.85;
+                harmonics.push({ mult: 1.0, amp: amp1X, phase: 0, label: '1X Rotación' });
+                harmonics.push({ mult: 2.0, amp: ampBase * 0.08, phase: 0.5, label: '2X Residual' });
+            }
+
+            // Calculate RMS total velocity
+            let sumSq = 0;
+            harmonics.forEach(h => { sumSq += (h.amp * h.amp) / 2; });
+            const totalRms = Math.sqrt(sumSq);
+
+            // Calculate Peak-to-Peak Displacement (approx in µm)
+            const freqHzEff = Math.max(f1X, 5);
+            const pkPkDisp = (totalRms * 1414.2) / (2 * Math.PI * freqHzEff) * 2;
+
+            // High Frequency gSE / PeakVue
+            let gseVal = 0.04 + (f1X / 120) * 0.05;
+            if (fault === 'bearing') gseVal = 1.45 + (f1X / 60) * 0.8;
+            if (fault === 'cavitation') gseVal = 2.10 + (f1X / 60) * 1.1;
+
+            return {
+                f1X,
+                totalRms,
+                pkPkDisp,
+                gseVal,
+                harmonics
+            };
+        }
+
+        // Canvas Resize Handler
+        function resizeCanvases() {
+            [timeCanvas, spectrumCanvas, demodTimeCanvas, demodSpectrumCanvas].forEach(canvas => {
+                if (canvas && canvas.parentElement) {
+                    canvas.width = canvas.parentElement.clientWidth;
+                    canvas.height = canvas.parentElement.clientHeight;
+                }
+            });
+        }
+        window.addEventListener('resize', resizeCanvases);
+
+        // Render Time Waveform Canvas
+        function drawTimeWaveform(sigData) {
+            timeCtx.clearRect(0, 0, timeCanvas.width, timeCanvas.height);
+            const w = timeCanvas.width;
+            const h = timeCanvas.height;
+            const marginB = 18;
+            const plotH = h - marginB;
+            const centerY = plotH / 2;
+
+            // Grid lines & Time axis scale (ms)
+            timeCtx.strokeStyle = 'rgba(51, 65, 85, 0.4)';
+            timeCtx.lineWidth = 1;
+            timeCtx.beginPath();
+            timeCtx.moveTo(0, centerY);
+            timeCtx.lineTo(w, centerY);
+
+            const totalTimeMs = 80;
+            const numDivs = 8;
+            for (let i = 0; i <= numDivs; i++) {
+                const x = (i / numDivs) * w;
+                timeCtx.moveTo(x, 0);
+                timeCtx.lineTo(x, plotH);
+                
+                const msVal = (i / numDivs) * totalTimeMs;
+                timeCtx.fillStyle = '#94a3b8';
+                timeCtx.font = '9px monospace';
+                const labelText = `${Math.round(msVal)} ms`;
+                const textWidth = timeCtx.measureText(labelText).width;
+                
+                let alignX = x - textWidth / 2;
+                if (i === 0) alignX = x + 2;
+                if (i === numDivs) alignX = x - textWidth - 2;
+                
+                timeCtx.fillText(labelText, alignX, h - 4);
+            }
+            timeCtx.stroke();
+
+            // Dynamic peak estimation for responsive auto-scale
+            const peakEst = Math.max(sigData.totalRms * 1.8, 0.5);
+            const niceScalesTime = [1, 2.5, 5, 10, 20, 35, 50, 75, 100];
+            const maxValScale = niceScalesTime.find(s => s >= peakEst) || Math.ceil(peakEst / 10) * 10;
+
+            // Waveform Plot
+            timeCtx.strokeStyle = '#c084fc';
+            timeCtx.lineWidth = 2;
+            timeCtx.beginPath();
+
+            const samples = 300;
+            const dt = (totalTimeMs / 1000) / samples;
+            const tOffset = state.timeStep;
+
+            for (let i = 0; i < samples; i++) {
+                const t = tOffset + i * dt;
+                let val = 0;
+
+                sigData.harmonics.forEach(harm => {
+                    const freq = harm.mult * sigData.f1X;
+                    val += harm.amp * Math.sin(2 * Math.PI * freq * t + harm.phase);
+                });
+
+                if (state.fault === 'bearing') {
+                    const period = 1 / (3.58 * sigData.f1X);
+                    const phaseInPeriod = (t % period) / period;
+                    if (phaseInPeriod < 0.08) {
+                        const pulse = Math.exp(-phaseInPeriod * 40) * Math.sin(2 * Math.PI * 1500 * t);
+                        val += pulse * sigData.totalRms * 2.2;
+                    }
+                }
+
+                const pixelX = (i / samples) * w;
+                const pixelY = centerY - (val / maxValScale) * (plotH * 0.45);
+
+                if (i === 0) timeCtx.moveTo(pixelX, pixelY);
+                else timeCtx.lineTo(pixelX, pixelY);
+            }
+
+            timeCtx.stroke();
+            timePeakDisplay.innerText = `Pk-Pk: ${sigData.pkPkDisp.toFixed(1)} µm | RMS Total: ${sigData.totalRms.toFixed(2)} mm/s`;
+        }
+
+        // Render FFT Frequency Spectrum Canvas
+        function drawSpectrum(sigData) {
+            spectrumCtx.clearRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+            const w = spectrumCanvas.width;
+            const h = spectrumCanvas.height;
+            const marginB = 22;
+            const marginL = 36;
+            const plotW = w - marginL - 10;
+            const plotH = h - marginB - 10;
+
+            const isBearingFault = (state.fault === 'bearing');
+            const fmaxCPM = 24000;
+            const fmaxKHz = 2.5; // Escala Fmax de 2.5 kHz para análisis de envolvente de rodamientos
+
+            // Determinación de la amplitud pico máxima en el espectro
+            let maxPeakAmp = 0.05;
+            sigData.harmonics.forEach(harm => {
+                const hFreq = isBearingFault ? (harm.freqKHz || (harm.mult * sigData.f1X / 1000)) : (harm.mult * sigData.f1X * 60);
+                const maxRange = isBearingFault ? fmaxKHz : fmaxCPM;
+                if (hFreq <= maxRange && harm.amp > maxPeakAmp) {
+                    maxPeakAmp = harm.amp;
+                }
+            });
+
+            // Escala escalonada discreta para rango dinámico
+            const niceSpectrumScales = [0.5, 1, 2.5, 5, 10, 20, 35, 50, 75, 100];
+            const maxAmp = niceSpectrumScales.find(s => s >= maxPeakAmp * 1.25) || (Math.ceil((maxPeakAmp * 1.25) / 10) * 10);
+
+            const scaleBadge = document.getElementById('scaleBadge');
+            if (scaleBadge) {
+                const unitStr = isBearingFault ? 'gE' : 'mm/s';
+                scaleBadge.innerText = `Escala Y: 0 - ${maxAmp} ${unitStr} (Auto-Rango)`;
+            }
+
+            // Grid Axes
+            spectrumCtx.strokeStyle = 'rgba(51, 65, 85, 0.4)';
+            spectrumCtx.lineWidth = 1;
+            spectrumCtx.beginPath();
+            
+            const numYDivs = 4;
+            for (let i = 0; i <= numYDivs; i++) {
+                const a = (i / numYDivs) * maxAmp;
+                const y = h - marginB - (i / numYDivs) * plotH;
+                spectrumCtx.moveTo(marginL, y);
+                spectrumCtx.lineTo(w - 10, y);
+                
+                spectrumCtx.fillStyle = '#94a3b8';
+                spectrumCtx.font = '9px monospace';
+                const labelStr = maxAmp >= 10 ? a.toFixed(1) : a.toFixed(2);
+                spectrumCtx.fillText(labelStr, 2, y + 3);
+            }
+
+            if (isBearingFault) {
+                // Eje X en Kilohertz (kHz) para Falla de Rodamiento
+                for (let khz = 0; khz <= fmaxKHz; khz += 0.5) {
+                    const x = marginL + (khz / fmaxKHz) * plotW;
+                    spectrumCtx.moveTo(x, 10);
+                    spectrumCtx.lineTo(x, h - marginB);
+
+                    spectrumCtx.fillStyle = '#f59e0b';
+                    spectrumCtx.font = '9px monospace';
+                    spectrumCtx.fillText(`${khz.toFixed(1)}k`, x - 8, h - 6);
+                }
+            } else {
+                // Eje X en CPM para otros modos de fallo
+                for (let cpm = 0; cpm <= fmaxCPM; cpm += 6000) {
+                    const x = marginL + (cpm / fmaxCPM) * plotW;
+                    spectrumCtx.moveTo(x, 10);
+                    spectrumCtx.lineTo(x, h - marginB);
+
+                    spectrumCtx.fillStyle = '#64748b';
+                    spectrumCtx.font = '9px monospace';
+                    spectrumCtx.fillText(`${cpm / 1000}k`, x - 8, h - 6);
+                }
+            }
+            spectrumCtx.stroke();
+
+            // Curva del Espectro
+            spectrumCtx.strokeStyle = isBearingFault ? '#f59e0b' : '#38bdf8';
+            spectrumCtx.lineWidth = 1.8;
+            spectrumCtx.beginPath();
+
+            const bins = 400;
+            for (let i = 0; i <= bins; i++) {
+                let amp = 0.02 + Math.random() * 0.01;
+
+                if (isBearingFault) {
+                    const khz = (i / bins) * fmaxKHz;
+                    sigData.harmonics.forEach(harm => {
+                        const hKHz = harm.freqKHz || (harm.mult * sigData.f1X / 1000);
+                        const dist = Math.abs(khz - hKHz);
+                        if (dist < 0.03) {
+                            amp += harm.amp * Math.exp(-dist * dist / 0.0002);
+                        }
+                    });
+                    const x = marginL + (khz / fmaxKHz) * plotW;
+                    const y = h - marginB - (amp / maxAmp) * plotH;
+                    if (i === 0) spectrumCtx.moveTo(x, y);
+                    else spectrumCtx.lineTo(x, y);
+                } else {
+                    const cpm = (i / bins) * fmaxCPM;
+                    sigData.harmonics.forEach(harm => {
+                        const hCPM = harm.mult * sigData.f1X * 60;
+                        const dist = Math.abs(cpm - hCPM);
+                        if (dist < 180) {
+                            amp += harm.amp * Math.exp(-dist * dist / 2500);
+                        }
+                    });
+                    const x = marginL + (cpm / fmaxCPM) * plotW;
+                    const y = h - marginB - (amp / maxAmp) * plotH;
+                    if (i === 0) spectrumCtx.moveTo(x, y);
+                    else spectrumCtx.lineTo(x, y);
+                }
+            }
+            spectrumCtx.stroke();
+
+            // Relleno de área del espectro
+            spectrumCtx.lineTo(marginL + plotW, h - marginB);
+            spectrumCtx.lineTo(marginL, h - marginB);
+            spectrumCtx.fillStyle = isBearingFault ? 'rgba(245, 158, 11, 0.15)' : 'rgba(56, 189, 248, 0.12)';
+            spectrumCtx.fill();
+
+            // Marcadores de Picos con unidades dinámicas (gE o mm/s)
+            sigData.harmonics.forEach(harm => {
+                const hFreq = isBearingFault ? (harm.freqKHz || (harm.mult * sigData.f1X / 1000)) : (harm.mult * sigData.f1X * 60);
+                const maxRange = isBearingFault ? fmaxKHz : fmaxCPM;
+                const unitStr = isBearingFault ? 'gE' : 'mm/s';
+
+                if (hFreq <= maxRange && harm.amp > 0.05) {
+                    const x = marginL + (hFreq / maxRange) * plotW;
+                    const y = h - marginB - (harm.amp / maxAmp) * plotH;
+
+                    spectrumCtx.fillStyle = '#f59e0b';
+                    spectrumCtx.beginPath();
+                    spectrumCtx.arc(x, y, 3.5, 0, Math.PI * 2);
+                    spectrumCtx.fill();
+
+                    spectrumCtx.fillStyle = '#fcd34d';
+                    spectrumCtx.font = 'bold 9px sans-serif';
+                    spectrumCtx.fillText(`${harm.label} (${harm.amp.toFixed(2)} ${unitStr})`, x - 20, Math.max(y - 6, 15));
+                }
+            });
+
+            // Cursor de inspección interactivo
+            if (state.spectrumHoverCPM > 0) {
+                let hoverAmp = 0.02;
+                if (isBearingFault) {
+                    sigData.harmonics.forEach(harm => {
+                        const hKHz = harm.freqKHz || (harm.mult * sigData.f1X / 1000);
+                        const dist = Math.abs(state.spectrumHoverCPM - hKHz);
+                        if (dist < 0.03) {
+                            hoverAmp += harm.amp * Math.exp(-dist * dist / 0.0002);
+                        }
+                    });
+
+                    const x = marginL + (state.spectrumHoverCPM / fmaxKHz) * plotW;
+                    const y = h - marginB - (hoverAmp / maxAmp) * plotH;
+
+                    spectrumCtx.strokeStyle = 'rgba(239, 68, 68, 0.75)';
+                    spectrumCtx.setLineDash([3, 3]);
+                    spectrumCtx.beginPath();
+                    spectrumCtx.moveTo(x, 10);
+                    spectrumCtx.lineTo(x, h - marginB);
+                    spectrumCtx.moveTo(marginL, y);
+                    spectrumCtx.lineTo(marginL + plotW, y);
+                    spectrumCtx.stroke();
+                    spectrumCtx.setLineDash([]);
+
+                    spectrumCtx.fillStyle = '#ef4444';
+                    spectrumCtx.beginPath();
+                    spectrumCtx.arc(x, y, 4, 0, Math.PI * 2);
+                    spectrumCtx.fill();
+                    spectrumCtx.strokeStyle = '#ffffff';
+                    spectrumCtx.lineWidth = 1.5;
+                    spectrumCtx.stroke();
+
+                    spectrumCursorVal.innerText = `${state.spectrumHoverCPM.toFixed(3)} kHz (${Math.round(state.spectrumHoverCPM * 1000)} Hz) | ${hoverAmp.toFixed(2)} gE`;
+                } else {
+                    sigData.harmonics.forEach(harm => {
+                        const hCPM = harm.mult * sigData.f1X * 60;
+                        const dist = Math.abs(state.spectrumHoverCPM - hCPM);
+                        if (dist < 180) {
+                            hoverAmp += harm.amp * Math.exp(-dist * dist / 2500);
+                        }
+                    });
+
+                    const x = marginL + (state.spectrumHoverCPM / fmaxCPM) * plotW;
+                    const y = h - marginB - (hoverAmp / maxAmp) * plotH;
+
+                    spectrumCtx.strokeStyle = 'rgba(239, 68, 68, 0.75)';
+                    spectrumCtx.setLineDash([3, 3]);
+                    spectrumCtx.beginPath();
+                    spectrumCtx.moveTo(x, 10);
+                    spectrumCtx.lineTo(x, h - marginB);
+                    spectrumCtx.moveTo(marginL, y);
+                    spectrumCtx.lineTo(marginL + plotW, y);
+                    spectrumCtx.stroke();
+                    spectrumCtx.setLineDash([]);
+
+                    spectrumCtx.fillStyle = '#ef4444';
+                    spectrumCtx.beginPath();
+                    spectrumCtx.arc(x, y, 4, 0, Math.PI * 2);
+                    spectrumCtx.fill();
+                    spectrumCtx.strokeStyle = '#ffffff';
+                    spectrumCtx.lineWidth = 1.5;
+                    spectrumCtx.stroke();
+
+                    spectrumCursorVal.innerText = `${Math.round(state.spectrumHoverCPM)} CPM (${(state.spectrumHoverCPM/60).toFixed(1)} Hz) | ${hoverAmp.toFixed(2)} mm/s`;
+                }
+            }
+        }
+
+        // Render High Frequency Demodulation Canvases (gSE / PeakVue)
+        function drawDemodulationCharts(sigData) {
+            demodTimeCtx.clearRect(0, 0, demodTimeCanvas.width, demodTimeCanvas.height);
+            const w1 = demodTimeCanvas.width;
+            const h1 = demodTimeCanvas.height;
+
+            // Escala escalonada para altas frecuencias
+            const gseScales = [0.2, 0.5, 1.0, 2.0, 5.0, 10.0];
+            const maxGseScale = gseScales.find(s => s >= sigData.gseVal * 1.3) || (sigData.gseVal * 1.5);
+
+            demodTimeCtx.strokeStyle = '#f59e0b';
+            demodTimeCtx.lineWidth = 1.5;
+            demodTimeCtx.beginPath();
+
+            const samples = 250;
+            for (let i = 0; i < samples; i++) {
+                const t = state.timeStep + (i / samples) * 0.1;
+                let envVal = sigData.gseVal * 0.1;
+
+                if (state.fault === 'bearing') {
+                    const bpfoPeriod = 1 / (3.58 * sigData.f1X);
+                    const phase = (t % bpfoPeriod) / bpfoPeriod;
+                    if (phase < 0.06) {
+                        envVal += sigData.gseVal * Math.exp(-phase * 50);
+                    }
+                } else if (state.fault === 'cavitation') {
+                    envVal += Math.random() * sigData.gseVal * 0.8;
+                }
+
+                const x = (i / samples) * w1;
+                const y = h1 - 5 - (envVal / maxGseScale) * (h1 - 10);
+
+                if (i === 0) demodTimeCtx.moveTo(x, y);
+                else demodTimeCtx.lineTo(x, y);
+            }
+            demodTimeCtx.stroke();
+            document.getElementById('gsePeakLabel').innerText = `gSE PeakVue: ${sigData.gseVal.toFixed(2)} gPk`;
+
+            // Demod Spectrum Canvas
+            demodSpectrumCtx.clearRect(0, 0, demodSpectrumCanvas.width, demodSpectrumCanvas.height);
+            const w2 = demodSpectrumCanvas.width;
+            const h2 = demodSpectrumCanvas.height;
+
+            demodSpectrumCtx.strokeStyle = '#a855f7';
+            demodSpectrumCtx.lineWidth = 1.8;
+            demodSpectrumCtx.beginPath();
+
+            const fmaxDemod = 12000;
+            const bpfoCPM = 3.58 * sigData.f1X * 60;
+
+            for (let i = 0; i < 200; i++) {
+                const cpm = (i / 200) * fmaxDemod;
+                let amp = 0.02 + Math.random() * 0.02;
+
+                if (state.fault === 'bearing') {
+                    [1, 2, 3].forEach(harm => {
+                        const targetCPM = bpfoCPM * harm;
+                        if (Math.abs(cpm - targetCPM) < 150) {
+                            amp += (sigData.gseVal / harm) * 0.6;
+                        }
+                    });
+                }
+
+                const x = (cpm / fmaxDemod) * w2;
+                const y = h2 - 5 - (amp / maxGseScale) * (h2 - 10);
+
+                if (i === 0) demodSpectrumCtx.moveTo(x, y);
+                else demodSpectrumCtx.lineTo(x, y);
+            }
+            demodSpectrumCtx.stroke();
+
+            const harmonicText = state.fault === 'bearing' ? `Picos BPFO: ${(bpfoCPM).toFixed(0)} CPM (${(bpfoCPM/60).toFixed(1)} Hz)` : 'Sin Defecto de Rodamiento Detectado';
+            document.getElementById('bearingHarmonicLabel').innerText = harmonicText;
+            document.getElementById('hudGseVal').innerText = `${sigData.gseVal.toFixed(2)} gPk`;
+            document.getElementById('hudImpactFreq').innerText = state.fault === 'bearing' ? `${(bpfoCPM/60).toFixed(1)} Hz` : 'N/A';
+        }
+
+        // Spectrum Mouse Movement
+        spectrumCanvas.addEventListener('mousemove', (e) => {
+            const rect = spectrumCanvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const marginL = 36;
+            const plotW = spectrumCanvas.width - marginL - 10;
+            const isBearingFault = (state.fault === 'bearing');
+
+            if (mouseX >= marginL && mouseX <= marginL + plotW) {
+                if (isBearingFault) {
+                    const fmaxKHz = 2.5;
+                    state.spectrumHoverCPM = ((mouseX - marginL) / plotW) * fmaxKHz;
+                } else {
+                    const fmaxCPM = 24000;
+                    state.spectrumHoverCPM = ((mouseX - marginL) / plotW) * fmaxCPM;
+                }
+            } else {
+                state.spectrumHoverCPM = 0;
+            }
+        });
+
+        spectrumCanvas.addEventListener('mouseleave', () => {
+            state.spectrumHoverCPM = 0;
+            spectrumCursorVal.innerText = (state.fault === 'bearing') ? '0.000 kHz | 0.00 gE' : '0 CPM | 0.00 mm/s';
+        });
+
+        spectrumCanvas.addEventListener('mouseleave', () => {
+            state.spectrumHoverCPM = 0;
+            spectrumCursorVal.innerText = '0 CPM | 0.00 mm/s';
+        });
+
+        // -------------------------------------------------------------
+        // ISO 20816-3 SEVERITY ASSESSMENT & TECHNICAL DIAGNOSTICS
+        // -------------------------------------------------------------
+        function updateDiagnosticTheory() {
+            const sigData = computeVibrationData();
+            const rms = sigData.totalRms;
+            const isFlex = state.montaje === 'flexible';
+
+            // Actualizar encabezados y unidades de la gráfica del espectro según falla de rodamientos (kHz / gE)
+            const spectrumTitle = document.getElementById('spectrumTitle');
+            const fmaxLabel = document.getElementById('fmaxLabel');
+            const unitsDisplay = document.getElementById('unitsDisplay');
+
+            if (state.fault === 'bearing') {
+                if (spectrumTitle) spectrumTitle.innerHTML = '<i class="fa-solid fa-bolt text-amber-400 mr-1"></i> Espectro de Envolvente / Rodamientos (kHz)';
+                if (fmaxLabel) fmaxLabel.innerText = '2.5 kHz';
+                if (unitsDisplay && state.activeTab === 'fft') unitsDisplay.innerText = 'gE vs kHz';
+            } else {
+                if (spectrumTitle) spectrumTitle.innerHTML = '<i class="fa-solid fa-chart-line text-blue-400 mr-1"></i> Espectro de Frecuencia Velocidad (CPM)';
+                if (fmaxLabel) fmaxLabel.innerText = '24,000 CPM';
+                if (unitsDisplay && state.activeTab === 'fft') unitsDisplay.innerText = 'mm/s RMS vs CPM';
+            }
+
+            const limits = isFlex ? [2.3, 4.5, 7.1] : [1.4, 2.8, 4.5];
+
+            isoFoundationType.innerText = isFlex ? "Base Flexible:" : "Base Rígida:";
+            isoThresholdLabels.innerHTML = `<span>0</span><span>${limits[0]}</span><span>${limits[1]}</span><span>${limits[2]}+ mm/s</span>`;
+
+            let zone = 'A';
+            let colorClass = 'text-emerald-400';
+            let statusIconStr = 'fa-check';
+            let statusBorderColor = 'border-emerald-500 bg-emerald-500/10 text-emerald-400';
+            let statusTitleStr = 'En Perfecta Condición';
+            let statusDescStr = 'La máquina se encuentra en parámetros normales de operación según la norma ISO 20816-3.';
+
+            if (rms < limits[0]) {
+                zone = 'A (Bueno)';
+                isoBarA.style.opacity = '1.0';
+                isoBarB.style.opacity = '0.3';
+                isoBarC.style.opacity = '0.3';
+                isoBarD.style.opacity = '0.3';
+            } else if (rms < limits[1]) {
+                zone = 'B (Satisfactorio)';
+                colorClass = 'text-yellow-400';
+                statusIconStr = 'fa-triangle-exclamation';
+                statusBorderColor = 'border-yellow-500 bg-yellow-500/10 text-yellow-400';
+                statusTitleStr = 'Operación Satisfactoria';
+                statusDescStr = 'Nivel de vibración aceptable para operación continua a largo plazo.';
+                isoBarA.style.opacity = '0.3';
+                isoBarB.style.opacity = '1.0';
+                isoBarC.style.opacity = '0.3';
+                isoBarD.style.opacity = '0.3';
+            } else if (rms < limits[2]) {
+                zone = 'C (Insatisfactorio)';
+                colorClass = 'text-orange-400';
+                statusIconStr = 'fa-circle-exclamation';
+                statusBorderColor = 'border-orange-500 bg-orange-500/10 text-orange-400';
+                statusTitleStr = 'Alerta de Mantenimiento';
+                statusDescStr = 'Vibración elevada. Planificar acción correctiva o alineación/balanceo pronto.';
+                isoBarA.style.opacity = '0.3';
+                isoBarB.style.opacity = '0.3';
+                isoBarC.style.opacity = '1.0';
+                isoBarD.style.opacity = '0.3';
+            } else {
+                zone = 'D (Peligro / Alarma)';
+                colorClass = 'text-red-500';
+                statusIconStr = 'fa-skull-crossbones';
+                statusBorderColor = 'border-red-600 bg-red-600/10 text-red-500';
+                statusTitleStr = '¡Peligro Crítico!';
+                statusDescStr = 'Riesgo inminente de fallo o daño catastrófico. Apagar máquina para revisión.';
+                isoBarA.style.opacity = '0.3';
+                isoBarB.style.opacity = '0.3';
+                isoBarC.style.opacity = '0.3';
+                isoBarD.style.opacity = '1.0';
+            }
+
+            isoZoneText.innerText = `Zona ${zone}`;
+            isoZoneText.className = `font-bold ${colorClass}`;
+
+            statusIconContainer.className = `w-12 h-12 rounded-full border-2 flex items-center justify-center text-xl my-0.5 transition-all ${statusBorderColor}`;
+            statusIcon.className = `fa-solid ${statusIconStr}`;
+            statusTitle.innerText = statusTitleStr;
+            statusTitle.className = `text-xs font-bold ${colorClass}`;
+            statusDesc.innerText = statusDescStr;
+
+            // Update Theory Text based on selected Fault
+            const faultName = faultSelect.options[faultSelect.selectedIndex].text;
+            theoryTitle.innerText = `${montajeSelect.options[montajeSelect.selectedIndex].text} — ${faultName}`;
+
+            if (state.fault === 'ideal') {
+                theoryBody.innerText = `La máquina se encuentra en condiciones ideales. La frecuencia armónica fundamental 1X (${(state.hz*60).toFixed(0)} CPM) presenta amplitudes mínimas normales resultantes del mecanizado del eje.`;
+            } else if (state.fault === 'unbalance') {
+                const axisName = state.sensorAxis === 'Z' ? 'Axial (Z)' : `Radial (${state.sensorAxis})`;
+                theoryBody.innerText = `DESBALANCE DE MASA: En medición ${axisName}, la componente fundamental 1X (${(state.hz*60).toFixed(0)} CPM) muestra una amplitud equivalente a la magnitud regulada (${sigData.harmonics[0].amp.toFixed(2)} mm/s). En mediciones radiales (X, Y) el desbalance es puro a 1X; en medición axial (Z) se atenúa significativamente, confirmando fuerza centrífuga puramente radial.`;
+            } else if (state.fault === 'misalignment') {
+                theoryBody.innerText = `DESALINEACIÓN SEVERA: Caracterizada por picos armónicos prominentes a 2X (${(state.hz*120).toFixed(0)} CPM) y 3X, acompañada de un incremento crítico en las mediciones axiales (Eje Z). Ocurre por falta de colinealidad entre los ejes del motor y la carga.`;
+            } else if (state.fault === 'bearing') {
+                theoryBody.innerText = `FALLA EN RODAMIENTO (ALTAS FRECUENCIAS): En el espectro de velocidad tradicional se observan picos iniciales en BPFO (3.58X = ${(state.hz*3.58*60).toFixed(0)} CPM). La técnica de Demodulación de Altas Frecuencias (gSE / PeakVue) filtra el ruido de baja frecuencia y demodula las ondas de impacto de alta frecuencia (5-40 kHz), revelando etapas tempranas de picadura en pista exterior.`;
+            } else if (state.fault === 'bpf') {
+                theoryBody.innerText = `PASO DE ÁLABES (BPF = N × 1X): Se genera una frecuencia de paso de álabes BPF a ${(state.hz*state.blades*60).toFixed(0)} CPM (${state.blades} álabes × 1X). Típico de turbulencias aerodinámicas, holguras en la voluta o desbalance hidráulico en el rodete.`;
+            } else if (state.fault === 'cavitation') {
+                theoryBody.innerText = `CAVITACIÓN / FRICCIÓN DE ALTA FRECUENCIA: Se evidencia una elevación del piso de ruido en altas frecuencias (banda ancha) provocada por el colapso violento de burbujas de vapor o contacto metal-metal continuo por falta de lubricación.`;
+            }
+        }
+
+        // Web Audio Synthesizer
+        function toggleAudio() {
+            state.audioEnabled = !state.audioEnabled;
+            const audioIcon = document.getElementById('audioIcon');
+            const audioText = document.getElementById('audioText');
+
+            if (state.audioEnabled) {
+                if (!state.audioCtx) {
+                    state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                state.oscillator = state.audioCtx.createOscillator();
+                state.gainNode = state.audioCtx.createGain();
+
+                state.oscillator.type = 'sawtooth';
+                state.oscillator.frequency.value = Math.max(state.hz, 10);
+                
+                state.gainNode.gain.value = 0.05;
+
+                state.oscillator.connect(state.gainNode);
+                state.gainNode.connect(state.audioCtx.destination);
+                state.oscillator.start();
+
+                audioIcon.className = 'fa-solid fa-volume-high text-emerald-400';
+                audioText.innerText = 'Audio ON';
+            } else {
+                if (state.oscillator) {
+                    state.oscillator.stop();
+                    state.oscillator.disconnect();
+                }
+                audioIcon.className = 'fa-solid fa-volume-xmark text-slate-400';
+                audioText.innerText = 'Audio OFF';
+            }
+        }
+
+        function updateAudioPitch() {
+            if (state.audioEnabled && state.oscillator && state.audioCtx) {
+                state.oscillator.frequency.setTargetAtTime(Math.max(state.hz, 12), state.audioCtx.currentTime, 0.1);
+            }
+        }
+
+        // Control Inputs Binding
+        function updateStateFromInputs() {
+            state.hz = parseFloat(hzInput.value) || 0;
+            state.rpm = state.hz * 60;
+            state.cpm = state.rpm;
+            state.amplitude = parseFloat(ampInput.value) || 1.0;
+            state.blades = parseInt(bladesInput.value) || 6;
+            state.fault = faultSelect.value;
+            state.montaje = montajeSelect.value;
+
+            rpmDisplay.innerText = `${state.cpm} CPM (${state.rpm} RPM)`;
+
+            updateFan3D();
+            updateDiagnosticTheory();
+            updateAudioPitch();
+        }
+
+        function adjustHz(delta) {
+            let val = Math.max(0, Math.min(120, state.hz + delta));
+            hzInput.value = val;
+            updateStateFromInputs();
+        }
+
+        function adjustAmp(delta) {
+            let val = Math.max(0.1, Math.min(30, state.amplitude + delta));
+            ampInput.value = val.toFixed(1);
+            updateStateFromInputs();
+        }
+
+        function adjustBlades(delta) {
+            let val = Math.max(2, Math.min(16, state.blades + delta));
+            bladesInput.value = val;
+            updateStateFromInputs();
+        }
+
+        hzInput.addEventListener('input', updateStateFromInputs);
+        ampInput.addEventListener('input', updateStateFromInputs);
+        bladesInput.addEventListener('input', updateStateFromInputs);
+        faultSelect.addEventListener('change', updateStateFromInputs);
+        
+        montajeSelect.addEventListener('change', () => {
+            updateStateFromInputs();
+            build3DScene();
+            renderSensorMatrixUI();
+        });
+
+        // Tab Switching Logic
+        function switchSignalTab(tab) {
+            state.activeTab = tab;
+            const tabTime = document.getElementById('tabBtnWaveform');
+            const tabSpec = document.getElementById('tabBtnSpectrum');
+            const tabDemod = document.getElementById('tabBtnDemod');
+
+            const containerTime = document.getElementById('containerTime');
+            const containerSpectrum = document.getElementById('containerSpectrum');
+            const containerDemod = document.getElementById('containerDemod');
+            const unitsDisplay = document.getElementById('unitsDisplay');
+
+            [tabTime, tabSpec, tabDemod].forEach(b => b.classList.remove('active'));
+
+            if (tab === 'time') {
+                tabTime.classList.add('active');
+                containerTime.style.display = 'flex';
+                containerSpectrum.style.display = 'flex';
+                containerDemod.style.display = 'none';
+                unitsDisplay.innerText = 'Desplazamiento µm / Vel mm/s';
+            } else if (tab === 'fft') {
+                tabSpec.classList.add('active');
+                containerTime.style.display = 'flex';
+                containerSpectrum.style.display = 'flex';
+                containerDemod.style.display = 'none';
+                unitsDisplay.innerText = (state.fault === 'bearing') ? 'gE vs kHz' : 'mm/s RMS vs CPM';
+            } else if (tab === 'demod') {
+                tabDemod.classList.add('active');
+                containerTime.style.display = 'none';
+                containerSpectrum.style.display = 'none';
+                containerDemod.style.display = 'flex';
+                unitsDisplay.innerText = 'Aceleración gSE PeakVue';
+            }
+
+            setTimeout(resizeCanvases, 50);
+        }
+
+        btnPlayPause.addEventListener('click', () => {
+            state.isPlaying = !state.isPlaying;
+            if (state.isPlaying) {
+                playIcon.className = 'fa-solid fa-pause';
+                playText.innerText = 'Pausar';
+            } else {
+                playIcon.className = 'fa-solid fa-play';
+                playText.innerText = 'Reanudar';
+            }
+        });
+
+        // -------------------------------------------------------------
+        // MAIN ANIMATION LOOP
+        // -------------------------------------------------------------
+        let lastTime = performance.now();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const now = performance.now();
+            const dt = (now - lastTime) / 1000;
+            lastTime = now;
+
+            if (state.isPlaying) {
+                // Rotational physics
+                const rotSpeedRad = state.hz * Math.PI * 2;
+                state.angle += rotSpeedRad * dt;
+                state.timeStep += dt;
+
+                if (rotatingShaftGroup) {
+                    rotatingShaftGroup.rotation.x = state.angle;
+                }
+
+                // Mechanical vibration displacement in 3D scene
+                const sigData = computeVibrationData();
+                const vibAmp3D = Math.min(sigData.totalRms * 0.015, 0.12);
+
+                if (machineGroup && sigData.totalRms > 0.5) {
+                    const vibX = Math.sin(state.angle) * vibAmp3D;
+                    const vibY = Math.cos(state.angle) * vibAmp3D * (state.sensorAxis === 'Y' ? 1.2 : 0.8);
+                    
+                    if (state.montaje === 'flexible') {
+                        machineGroup.position.set(vibX * 1.5, vibY * 1.5, 0);
+                    } else {
+                        machineGroup.position.set(vibX * 0.5, vibY * 0.5, 0);
+                    }
+                } else if (machineGroup) {
+                    machineGroup.position.set(0, 0, 0);
+                }
+
+                // Render Canvas Charts
+                drawTimeWaveform(sigData);
+                drawSpectrum(sigData);
+                drawDemodulationCharts(sigData);
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Initialize App on Window Load
+        window.onload = function() {
+            build3DScene();
+            renderSensorMatrixUI();
+            updateStateFromInputs();
+            resizeCanvases();
+            animate();
+        };
+
+    </script>
+</body>
+</html>
